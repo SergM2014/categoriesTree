@@ -16,64 +16,39 @@ window.tree = function()
             this.minimised = false;
             let actualEl = this.$refs.tree.querySelector('[data-id = "' + currentElemId + '"]');
 
-            let actualOffsetTop = actualEl.offsetTop;
-            let actualOffsetHeight = this.$refs.tree.offsetHeight
-
             this._closeUselessGroups(level,parentId);
 
             let nextLevel = level+1;
+            let childrenGroup = document.querySelector('[data-level = "'+nextLevel+'"]')
+            if(!childrenGroup) return;
+//console.log(childrenGroup);
+            if(window.innerWidth <= 768)
+            {
+                this._openSmScreenChildren(actualEl, childrenGroup, parentId)
+                return;
+            }
+
+
+            this._paintStuff(actualEl, childrenGroup)
+
             let myItemsParentIdArr = this.$refs.tree.querySelectorAll('.origin');
 
             let myItemsParentId = false;
-            let insertedItem = false;
+
             myItemsParentIdArr.forEach( (item) => {
                 if(item.dataset.parentId == parentId) {
                     myItemsParentId = item;} });
 
-            let insertedNodesArr = this.$refs.tree.querySelectorAll('.inserted');
-            if(insertedNodesArr) {
-
-                insertedNodesArr.forEach( (item) => {
-                    if(item.dataset.parentId == parentId) {
-                        insertedItem = item;} });
-                if (insertedItem) myItemsParentId = insertedItem;
-            }
-
-            let childrenGroup = document.querySelector('[data-level = "'+nextLevel+'"]')
-            if(!childrenGroup) return;
-
-            this._paintStuff(actualEl, childrenGroup)
-            // if next items level doesnot exsists exit the process
             if(!myItemsParentId) return;
 
-            //if small screen
-
-            if(window.innerWidth < 768) {
-//if the item is already inserted
-                if(insertedItem){
-                    insertedItem.classList.remove('hidden');
-                } else {
-                    let clonedItemsParentId = myItemsParentId.cloneNode(true);
-                    let elem = this.$refs.tree.querySelector('[data-id = "' + parentId + '"]');
-                    elem.insertAdjacentElement('afterend', clonedItemsParentId);
-                    clonedItemsParentId.classList.add('inserted');
-                    clonedItemsParentId.classList.remove('origin');
-                    myItemsParentId.innerHTML = '';
-                    myItemsParentId.classList.add('empty');
-                    myItemsParentId.classList.remove('origin')
-                }
-            }
-            //end of small screen
-            else {
-                // if screen is beeg
-                myItemsParentId.classList.remove('hidden');
-            }
+            myItemsParentId.classList.remove('hidden');
+            childrenGroup.classList.remove('hidden');
 
 
+            let actualOffsetTop = actualEl.offsetTop;
+            let actualOffsetHeight = this.$refs.tree.offsetHeight
 
             actualOffsetTop = actualOffsetTop-4;
-
-            childrenGroup.classList.remove('hidden');
 
             childrenGroup.style.paddingTop = actualOffsetTop+"px";
 
@@ -120,33 +95,67 @@ window.tree = function()
             this.minimised = true;
         },
 
-        recoverInitialTree(){
+        restoreAppropriateTree()
+        {
+            this._buildSmallScreenTree();
+            this._recoverInitialBigTree();
+        },
+
+        _recoverInitialBigTree()
+        {
+
             if(window.innerWidth < 768) return;
+            this._hideDownArrows();
 
-            let insertedList = this.$refs.tree.querySelectorAll('.inserted')
+            let childrenGroups = this.$refs.tree.querySelectorAll('.childrenGroup');
 
-//exit if nodeList ist empty
-            if(insertedList.length == 0) return;
+//b esides the first child group
 
-            let emptedList = this.$refs.tree.querySelectorAll('.empty');
-//move inserted items to origin nodes
-            for (let i = 0 ; i < insertedList.length; i++ )
+            for(let i = 1; i< childrenGroups.length; i++)
             {
-                let innerHtml = insertedList[i].innerHTML;
+                childrenGroups[i].classList.add('hidden','top-0');
+                childrenGroups[i].classList.remove('left-0','right-0');
+                childrenGroups[i].style.removeProperty('top');
 
-                emptedList[i].innerHTML = innerHtml;
-                emptedList[i].classList.add('origin');
-                emptedList[i].classList.remove('empty');
-                insertedList[i].remove();
+                let classes = childrenGroups[i].classList;
+                for(let i2=0; i2 < classes.length; i2++)
+                {
+                    if(classes[i2].startsWith('bg')) childrenGroups[i].classList.remove(classes[i])
+                }
             }
+
+            let stuffes = this.$refs.tree.querySelectorAll('.stuff');
+            for(let i = 1; i < stuffes.length; i++ )
+            {
+                let classes = stuffes[i].classList;
+                for(let i2 =0; i2 < classes.length; i2++)
+                {
+                    if(classes[i2].startsWith('bg')) stuffes[i].classList.remove(classes[i2])
+
+                }
+
+            }
+
+           this._estRowsDirection()
 
         },
 
-        estRowsDirection()
+
+        initTree()
         {
             this.childGroups = this.$refs.tree.querySelectorAll('.childrenGroup');
+            this._estRowsDirection();
+            this._buildSmallScreenTree();
+        },
+        _estRowsDirection()
+        {
+            if(window.innerWidth <= 768) return;
+
             let actGroupWidth = this.childGroups[0].clientWidth;
-            let chunk_size = Math.floor(this.width/actGroupWidth)-1;
+            let width = document.getElementById('tree').parentElement.clientWidth
+
+            let chunk_size = Math.floor(width/actGroupWidth)-1;
+
 //*******************
 //tis piece of code is nesasery for apropriate building to left direction rows
             let leftArr =[];
@@ -157,10 +166,12 @@ window.tree = function()
 //*****************
 
             let arr  = Array.from(this.childGroups);
+
 //for technical needs remove first elem of array
             let firstElem = arr.shift();
+//console.table(arr)
             let groups = arr.map( function(e,i){
-                return i%chunk_size===0 ? arr.slice(i,i+chunk_size) : null;
+                return i % chunk_size === 0 ? arr.slice(i,i+chunk_size) : null;
             }).filter(function(e){ return e; });
 
 
@@ -168,7 +179,7 @@ window.tree = function()
             this.directionArr = groups.reduce((accumulator, value, index) =>
                 (accumulator[index % 2].push(value), accumulator), [[], []]
             );
-
+//console.log(this.directionArr)
             //direction to the left
             for (let i =0; i < this.directionArr[1].length; i++){
                 let length = this.directionArr[1][i].length;
@@ -187,12 +198,12 @@ window.tree = function()
                 }
             }
 
-            this._showArrows();
+            this._showSideArrows();
             this._setFirstColumnColor();
 
         },
 
-        _showArrows()
+        _showSideArrows()
         {
             //show appropriate arrows
             let arrow = this.childGroups[0].querySelectorAll('.arrow-right');
@@ -242,6 +253,28 @@ window.tree = function()
             }
         },
 
+        _hideSideArrows()
+        {
+            let arrows = this.$refs.tree.querySelectorAll('.arrow-right, .arrow-left');
+            arrows.forEach(item => item.classList.add('hidden'));
+        },
+
+        _showDownArrows()
+        {
+            for(let i = 0; i< this.childGroups.length; i++) {
+                let arrows = this.childGroups[i].querySelectorAll('.arrow-down');
+                arrows.forEach(item => item.classList.remove('hidden'));
+            }
+        },
+
+        _hideDownArrows()
+        {
+            for(let i = 0; i< this.childGroups.length; i++) {
+                let arrows = this.childGroups[i].querySelectorAll('.arrow-down');
+                arrows.forEach(item => item.classList.add('hidden'));
+            }
+        },
+
         _setFirstColumnColor()
         {
             //set parens column color
@@ -268,7 +301,7 @@ window.tree = function()
             if(actualEl.classList.contains('last') && !actualEl.querySelector('.arrow-left')
                 && !actualEl.querySelector('.arrow-right')
             ){
-                this._returnLastStuffColor(actualEl)
+                this._getLastStuffColor(actualEl)
             }
 
 
@@ -309,7 +342,10 @@ window.tree = function()
 
                 let outgoingParentId =  parentDiv.dataset.parentId;
                 let outgoingParentEl = this.$refs.tree.querySelector('[data-id = "' + outgoingParentId + '"]');
-                let findPrevieousLeft = outgoingParentEl.querySelector('.arrow-left:not(.hidden)');
+                if(!outgoingParentEl){ return }
+                    let findPrevieousLeft = outgoingParentEl.querySelector('.arrow-left:not(.hidden)');
+
+
                 if (turningRight && findPrevieousLeft)
                 {
                     let children = childrenGroup.querySelectorAll('.stuff');
@@ -330,7 +366,7 @@ window.tree = function()
             }
         },
 
-        _returnLastStuffColor(actualEl)
+        _getLastStuffColor(actualEl)
         {
             let parentEl = actualEl.closest('.childrenGroup');
 
@@ -356,7 +392,117 @@ window.tree = function()
                 item.classList.add(previousColor);
 
             })
+        },
+
+
+        _buildSmallScreenTree()
+        {
+            if(window.innerWidth > 768) return;
+            this._hideSideArrows();
+            this._removeBigScreenClasses();
+            this._setFirstColumnColor();
+            this._showDownArrows()
+
+        },
+
+        _openSmScreenChildren(actualEl, childrenGroup, parentId)
+        {
+            let myItemsParentIdArr = this.$refs.tree.querySelectorAll('.origin');
+
+            let myItemsParentId = false;
+
+            myItemsParentIdArr.forEach( (item) => {
+                if(item.dataset.parentId == parentId) {
+                    myItemsParentId = item;} });
+
+            if(!myItemsParentId) return;
+
+            myItemsParentId.classList.remove('hidden');
+
+            childrenGroup.classList.remove('hidden', 'top-0');
+            childrenGroup.classList.add('left-0','right-0')
+
+            this._paintSmallScreenChild(actualEl, childrenGroup);
+
+            let offsetLevels = ['.parentIdItems','.childrenGroup', '#tree' ]
+
+            let offsetTop = actualEl.offsetTop;
+
+            for (let i = 0; i < offsetLevels.length; i++)
+            {
+              offsetTop+=  actualEl.closest(offsetLevels[i]).offsetTop;
+            }
+            let actualHeight = actualEl.offsetHeight;
+
+            actualOffsetTop = offsetTop+actualHeight;
+            childrenGroup.style.top = actualOffsetTop+"px";
+
+
+        },
+
+        _paintSmallScreenChild(actualEl, childrenGroup)
+        {
+            let parentEl = actualEl.closest('.childrenGroup');
+
+            let parentElClasses = parentEl.querySelector('.stuff').classList;
+            let currentColorToDel;
+
+            for (let i = 0; i < parentElClasses.length; i++) {
+                if (parentElClasses[i].startsWith('bg')) currentColorToDel = parentElClasses[i];
+            }
+
+            let previousColor;
+
+
+            for (let i = 0; i < parentElClasses.length; i++) {
+                if (parentElClasses[i].startsWith('bg')) previousColor = parentElClasses[i];
+            }
+
+
+                let arr = previousColor.split('-');
+                let colorNumber = Number(arr[2]);
+
+                if (colorNumber < 600) {
+                    arr[2] = (colorNumber + 100);
+                    previousColor = arr.join('-');
+                } else {
+                    previousColor = this.directionsColors[1]
+                }
+
+
+
+
+//console.log(previousColor)
+            let stuff = childrenGroup.querySelectorAll('.stuff');
+            stuff.forEach(item => {
+                item.classList.remove(currentColorToDel)
+                item.classList.add(previousColor);
+
+            })
+
+        },
+
+        _removeBigScreenClasses()
+        {
+            let childrenGroups = this.$refs.tree.querySelectorAll('.childrenGroup');
+
+//b esides the first child group
+
+            for(let i = 1; i< childrenGroups.length; i++)
+            {
+                childrenGroups[i].classList.remove('top-0');
+                childrenGroups[i].classList.add('left-0','right-0');
+                childrenGroups[i].style.removeProperty('left');
+                childrenGroups[i].style.removeProperty('padding-top');
+
+                let classes = childrenGroups[i].classList;
+                for(let i=0; i < classes.length; i++)
+                {
+                    if(classes[i].startsWith('bg')) childrenGroups[i].classList.remove(classes[i])
+                }
+            }
         }
+
 
 
     }
